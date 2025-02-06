@@ -1,0 +1,82 @@
+#include <ESP8266WiFi.h>
+#include <PubSubClient.h> //library for MQTT
+const int trigPin = 12; // D6
+const int echoPin = 14; // D5
+#define SOUND_VELOCITY 0.034
+long duration;
+float distanceCm;
+char msg_out[20];
+// MQTT Credentials
+const char* ssid = "iphone"; // setting your AP SSID
+const char* password = "paik234"; // setting your AP PSK
+const char* mqttServer = "12.343.79.40"; // MQTT URL
+const char* clientID = "username0003"; // client ID user
+const char* topic = "sensordata"; // publish topic
+// Setting up WiFi and MQTT client
+WiFiClient espClient;
+PubSubClient client(espClient);
+void setup_wifi() {
+  delay(10);
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("");
+  Serial.println("WiFi connected");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+}
+void callback(char* topic, byte* payload, unsigned int l) {
+  Serial.print("Message arrived [");
+  Serial.print(topic);
+  Serial.print("] ");
+  for (int i = 0; i < l; i++) {
+    Serial.print((char)payload[i]);
+  }
+  Serial.println();
+}
+void reconnect() {
+  while (!client.connected()) {
+    if (client.connect(clientID)) {
+      Serial.println("MQTT connected");
+      client.subscribe("sensordata");
+      Serial.println("Topic Subscribed");
+    } else {
+      Serial.print("failed, rc=");
+      Serial.print(client.state());
+      Serial.println(" try again in 5 seconds");
+      delay(5000); // wait 5 seconds and retry
+    }
+  }
+}
+void setup() {
+  Serial.begin(115200);
+  setup_wifi();
+  pinMode(trigPin, OUTPUT); // Sets the trigPin as an Output
+  pinMode(echoPin, INPUT); // Sets the echoPin as an Input
+  client.setServer(mqttServer, 1883); // Setting MQTT server
+  client.setCallback(callback);
+}
+void loop() {
+  if (!client.connected()) { // If client is not connected
+    reconnect(); // Try to reconnect
+  }
+  client.loop();
+  // Clears the trigPin
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  // Sets the trigPin on HIGH state for 10 microseconds
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+  // Reads the echoPin, returns the sound wave travel time in microseconds
+  duration = pulseIn(echoPin, HIGH);
+  distanceCm = duration * SOUND_VELOCITY / 2;
+  // Prints the distance on the Serial Monitor
+  Serial.print("Distance (cm): ");
+  Serial.println(distanceCm);
+  dtostrf(distanceCm, 2, 0, msg_out);
+  client.publish(topic, msg_out);
+  delay(3000);
+}
